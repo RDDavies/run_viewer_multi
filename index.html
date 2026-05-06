@@ -141,9 +141,18 @@ html, body { height: 100%; background: var(--bg); color: var(--text);
                        border-bottom: none; font-weight: 600; padding-top: 5px; }
 
 /* ── G-force ── */
-#gforce-sec { flex-shrink: 0; display: flex; flex-direction: column; align-items: center;
-              padding: 6px 0 8px; }
-#gforce-canvas { width: calc(100% - 20px); aspect-ratio: 1/1; background: #0a0e14; border-radius: 4px; }
+#gforce-sec { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center;
+              padding: 4px 0 6px; }
+#gforce-canvas { width: 160px; height: 160px; background: #0a0e14; border-radius: 4px; }
+
+/* ── Baseline selector ── */
+#baseline-wrap { display: flex; align-items: center; gap: 6px; padding: 2px 10px 6px; flex-wrap: wrap; }
+#baseline-wrap label { font-size: 10px; color: var(--muted); white-space: nowrap; }
+#baseline-select {
+  flex: 1; min-width: 0; font-size: 11px; background: #1c2128; color: var(--text);
+  border: 1px solid var(--border); border-radius: 4px; padding: 2px 4px; cursor: pointer;
+}
+#baseline-select:focus { outline: none; border-color: var(--accent); }
 
 /* ── Controls ── */
 #controls {
@@ -234,6 +243,12 @@ html, body { height: 100%; background: var(--bg); color: var(--text);
           Sector Analysis
           <span id="sec-info" style="font-size:9px;color:var(--muted);margin-left:4px;font-weight:400;"></span>
         </div>
+        <div id="baseline-wrap" style="display:none;">
+          <label>Baseline:</label>
+          <select id="baseline-select" onchange="setBaseline(this.value)">
+            <option value="">Auto (fastest)</option>
+          </select>
+        </div>
         <div id="sector-scroll" style="flex:1;overflow:auto;">
           <div id="sector-msg" style="display:none;"></div>
           <table id="stbl" style="display:none;"></table>
@@ -292,6 +307,7 @@ let rafId = null, lastTs = null, sliderDragging = false;
 let globalMaxBrk = 10000, globalMaxRpm = 9000;
 const gHistories = {};    // rid → [{x,y}]
 const G_HIST = 60;
+let baselineRunId = null; // null = auto (fastest), else a run id
 
 /* ════════════════════════════════════════════════════════
    CSV PARSING (identical to single-run version)
@@ -385,6 +401,15 @@ function setRunLap(run, lapIdx) {
 
 function getFastestRun() {
   return runs.reduce((b, r) => (r.lapDuration < (b?.lapDuration ?? Infinity) ? r : b), null);
+}
+function getBaselineRun() {
+  if (baselineRunId) return runs.find(r => r.id === baselineRunId) ?? getFastestRun();
+  return getFastestRun();
+}
+function setBaseline(id) {
+  baselineRunId = id || null;
+  renderSectorTable();
+  if (runs.length) updateAllDisplays();
 }
 
 function recomputeGlobalMeta() {
@@ -564,12 +589,25 @@ function placeSectorMarkers() {
    SECTOR TABLE RENDERING
 ════════════════════════════════════════════════════════ */
 function renderSectorTable() {
-  const msg = document.getElementById('sector-msg');
-  const tbl = document.getElementById('stbl');
+  const msg  = document.getElementById('sector-msg');
+  const tbl  = document.getElementById('stbl');
   const info = document.getElementById('sec-info');
+  const blWrap = document.getElementById('baseline-wrap');
+  const blSel  = document.getElementById('baseline-select');
+
+  // Sync baseline selector options
+  if (blSel) {
+    const prev = blSel.value;
+    blSel.innerHTML = '<option value="">Auto (fastest)</option>'
+      + runs.map(r => `<option value="${r.id}">${shortName(r.filename)}</option>`).join('');
+    blSel.value = runs.find(r => r.id === prev) ? prev : '';
+    if (!blSel.value) baselineRunId = null;
+  }
 
   if (!runs.length) {
-    msg.style.display='none'; tbl.style.display='none'; return;
+    msg.style.display='none'; tbl.style.display='none';
+    if (blWrap) blWrap.style.display='none';
+    return;
   }
   if (!sectors.length) {
     const hasThr = runs.some(r => r.lapData.some(d => d.thr != null));
@@ -577,47 +615,71 @@ function renderSectorTable() {
       ? 'No sector boundaries detected. Try loading runs with more varied throttle/brake usage.'
       : 'Throttle data not available for sector detection.';
     msg.style.display='block'; tbl.style.display='none';
+    if (blWrap) blWrap.style.display='none';
     info.textContent=''; return;
   }
 
-  const N = runs[0].sectorTimes.length; // sectors.length + 1
+  if (blWrap) blWrap.style.display = runs.length >= 2 ? 'flex' : 'none';
+
+  const base = getBaselineRun();
+  const N = runs[0].sectorTimes.length;
   info.textContent = `${sectors.length} boundaries · ${N} sectors`;
   msg.style.display='none'; tbl.style.display='';
 
-  // Per-sector fastest time (for delta colouring)
-  const fastest = Array.from({length: N}, (_,i) =>
+  // Per-sector absolute fastest (for bold highlight only)
+  const sectorFastest = Array.from({length: N}, (_, i) =>
     Math.min(...runs.map(r => r.sectorTimes[i]?.duration ?? Infinity)));
 
   let h = '<thead><tr><th>Sec</th>';
-  runs.forEach(r => { h += `<th style="color:${r.color}">${shortName(r.filename)}</th>`; });
+  runs.forEach(r => {
+    const isBase = r === base;
+    h += `<th style="color:${r.color}">${shortName(r.filename)}`
+       + `${isBase ? '<span style="font-size:9px;color:var(--muted);font-weight:400"> ★base</span>' : ''}</th>`;
+  });
   h += '</tr></thead><tbody>';
 
   for (let i = 0; i < N; i++) {
     h += `<tr data-sec="${i}"><td>S${i+1}</td>`;
+    const baseSt = base?.sectorTimes[i];
     runs.forEach(r => {
       const st = r.sectorTimes[i];
       if (!st) { h += `<td data-sc-rid="${r.id}" data-sc-idx="${i}">—</td>`; return; }
-      const isBest = Math.abs(st.duration - fastest[i]) < 1;
-      const delta = st.duration - fastest[i];
-      const dStr = delta > 0.5
-        ? `<span class="sc-delta pos">+${(delta/1000).toFixed(3)}</span>` : '';
-      h += `<td class="stcell${isBest?' sc-best':''}" `
+      const isBest = Math.abs(st.duration - sectorFastest[i]) < 1;
+      const isBase = r === base;
+      let dStr = '';
+      if (!isBase && baseSt) {
+        const delta = st.duration - baseSt.duration;
+        if (Math.abs(delta) > 0.5) {
+          const cls = delta > 0 ? 'pos' : 'neg';
+          const sign = delta > 0 ? '+' : '';
+          dStr = `<span class="sc-delta ${cls}">${sign}${(delta/1000).toFixed(3)}</span>`;
+        }
+      }
+      h += `<td class="${isBest ? 'sc-best' : ''}" `
          + `data-sc-rid="${r.id}" data-sc-idx="${i}" `
-         + `style="color:${isBest?r.color:'var(--muted)'}">`
+         + `style="color:${isBest ? r.color : 'var(--muted)'}">`
          + `${(st.duration/1000).toFixed(3)}${dStr}</td>`;
     });
     h += '</tr>';
   }
 
-  // Total row
+  // Total / lap row
   h += '<tr class="total-row"><td>LAP</td>';
   const fastestTotal = Math.min(...runs.map(r => r.lapDuration));
+  const baseLap = base?.lapDuration;
   runs.forEach(r => {
-    const isBest = Math.abs(r.lapDuration - fastestTotal) < 1;
-    const delta = r.lapDuration - fastestTotal;
-    const dStr = delta > 0.5
-      ? `<span class="sc-delta pos">+${(delta/1000).toFixed(3)}</span>` : '';
-    h += `<td style="color:${isBest?r.color:'var(--muted)'}">`
+    const isBest  = Math.abs(r.lapDuration - fastestTotal) < 1;
+    const isBase  = r === base;
+    let dStr = '';
+    if (!isBase && baseLap) {
+      const delta = r.lapDuration - baseLap;
+      if (Math.abs(delta) > 0.5) {
+        const cls  = delta > 0 ? 'pos' : 'neg';
+        const sign = delta > 0 ? '+' : '';
+        dStr = `<span class="sc-delta ${cls}">${sign}${(delta/1000).toFixed(3)}</span>`;
+      }
+    }
+    h += `<td style="color:${isBest ? r.color : 'var(--muted)'}">`
        + `${fmtTime(r.lapDuration)}${dStr}</td>`;
   });
   h += '</tr></tbody>';
@@ -758,7 +820,7 @@ function hexA(hex, a) {
    PER-FRAME DISPLAY UPDATE
 ════════════════════════════════════════════════════════ */
 function updateAllDisplays() {
-  const fast = getFastestRun();
+  const fast = getBaselineRun();
 
   for (const run of runs) {
     const d = run.lapData[run.currentIdx];
@@ -947,6 +1009,7 @@ function removeRun(rid) {
   const idx = runs.findIndex(r => r.id === rid);
   if (idx < 0) return;
   const run = runs[idx];
+  if (baselineRunId === rid) baselineRunId = null;
   run.polylines.forEach(p => trackLayer.removeLayer(p));
   if (run.marker) markerLayer.removeLayer(run.marker);
   delete gHistories[rid];
