@@ -59,11 +59,11 @@ html, body { height: 100%; background: var(--bg); color: var(--text);
 /* ── Layout ── */
 #body { display: flex; flex-direction: column; height: calc(100vh - 50px - 52px); }
 #content { display: flex; flex: 1; overflow: hidden; }
-#map { flex: 1; min-width: 0; }
+#map { flex: 2; min-width: 0; }
 
 /* ── Right panel ── */
 #panel {
-  width: 330px; flex-shrink: 0; background: var(--panel);
+  flex: 1; min-width: 260px; background: var(--panel);
   border-left: 1px solid var(--border);
   display: flex; flex-direction: column; overflow: hidden;
 }
@@ -77,36 +77,41 @@ html, body { height: 100%; background: var(--bg); color: var(--text);
 /* ── Run rows ── */
 #run-rows { flex-shrink: 0; overflow: hidden; }
 .rrow {
-  display: grid;
-  grid-template-columns: 10px 1fr 46px 44px 14px;
-  grid-template-rows: auto auto;
-  column-gap: 7px; row-gap: 2px;
-  padding: 6px 10px 5px;
+  display: flex; flex-direction: column;
+  padding: 7px 10px 6px;
   border-bottom: 1px solid rgba(48,54,61,.5);
+  gap: 5px;
 }
-.rrow-stripe { grid-column: 1; grid-row: 1 / 3;
-               width: 3px; border-radius: 2px; align-self: stretch; }
-.rrow-name { grid-column: 2; grid-row: 1;
-             font-size: 11px; font-weight: 600; color: var(--text);
-             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rrow-vals { grid-column: 3; grid-row: 1;
-             font-size: 11px; color: var(--text); font-variant-numeric: tabular-nums;
-             white-space: nowrap; text-align: right; }
-.rrow-gear { grid-column: 4; grid-row: 1;
-             font-size: 20px; font-weight: 800; color: var(--orange);
-             text-align: center; line-height: 1.1; font-variant-numeric: tabular-nums; }
-.rrow-delta { grid-column: 5; grid-row: 1 / 3; font-size: 10px;
-              font-weight: 700; text-align: right; align-self: center;
-              font-variant-numeric: tabular-nums; white-space: nowrap; }
-.rrow-bars { grid-column: 2 / 5; grid-row: 2;
-             display: flex; gap: 4px; align-items: center; }
-.mini-bar-wrap { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.rrow-body { display: flex; flex-direction: column; gap: 4px; }
+.rrow-top { display: flex; align-items: center; gap: 8px; }
+.rrow-stripe { width: 3px; border-radius: 2px; align-self: stretch; flex-shrink: 0; }
+.rrow-name { font-size: 11px; font-weight: 600; color: var(--text);
+             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+.rrow-mph { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums;
+            line-height: 1; flex-shrink: 0; }
+.rrow-mph-unit { font-size: 9px; color: var(--muted); font-weight: 400; }
+.rrow-gear { font-size: 26px; font-weight: 900; color: var(--orange);
+             text-align: center; line-height: 1; font-variant-numeric: tabular-nums;
+             flex-shrink: 0; min-width: 24px; }
+.rrow-right { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex-shrink: 0; }
+.rrow-rpm { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rrow-delta { font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rrow-bot { display: flex; flex-direction: column; gap: 3px; }
+.bar-row { display: flex; align-items: center; gap: 6px; }
+.bar-label { font-size: 9px; color: var(--muted); width: 24px; flex-shrink: 0; letter-spacing: .5px; }
+.bar-track { flex: 1; height: 7px; background: #1c2128; border-radius: 3px; overflow: hidden; }
+.bar-fill { height: 100%; width: 0; border-radius: 3px; transition: width .05s; }
+.bar-thr { background: var(--green); }
+.bar-brk { background: var(--red); }
+.bar-pct { font-size: 10px; font-variant-numeric: tabular-nums; width: 32px;
+           text-align: right; flex-shrink: 0; }
+.rrow-sector { font-size: 10px; color: var(--muted); text-align: right; }
+/* legacy aliases kept for safety */
+.mini-bar-wrap { display: none; }
 .mini-bar-track { height: 5px; background: #1c2128; border-radius: 2px; overflow: hidden; }
 .mini-bar-fill { height: 100%; width: 0; border-radius: 2px; transition: width .05s; }
 .mb-thr { background: var(--green); }
 .mb-brk { background: var(--red); }
-.rrow-sector { font-size: 10px; color: var(--muted); white-space: nowrap;
-               align-self: center; flex-shrink: 0; min-width: 28px; text-align: right; }
 
 /* ── Sector table ── */
 #sector-wrap { flex: 1; display: flex; flex-direction: column; min-height: 0; }
@@ -131,7 +136,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text);
 /* ── G-force ── */
 #gforce-sec { flex-shrink: 0; display: flex; flex-direction: column; align-items: center;
               padding: 6px 0 8px; }
-#gforce-canvas { width: 260px; height: 260px; background: #0a0e14; border-radius: 4px; }
+#gforce-canvas { width: calc(100% - 20px); aspect-ratio: 1/1; background: #0a0e14; border-radius: 4px; }
 
 /* ── Controls ── */
 #controls {
@@ -230,7 +235,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text);
       <!-- G-force: all runs overlaid -->
       <div class="panel-sec" id="gforce-sec">
         <div class="panel-sec-title">G-Force</div>
-        <canvas id="gforce-canvas" width="260" height="260"></canvas>
+        <canvas id="gforce-canvas" width="400" height="400"></canvas>
       </div>
 
     </div>
@@ -635,20 +640,30 @@ function renderRunRows() {
   if (!runs.length) { wrap.innerHTML=''; return; }
   wrap.innerHTML = runs.map(r => `
     <div class="rrow" id="rrow-${r.id}">
-      <div class="rrow-stripe" style="background:${r.color}"></div>
-      <div class="rrow-name">${r.filename.replace(/\.csv$/i,'').substring(0,28)}</div>
-      <div class="rrow-vals">
-        <span id="rv-mph-${r.id}" style="color:${r.color}">0</span><span style="font-size:9px;color:var(--muted)">mph</span>
-        <span style="margin-left:5px;color:var(--muted);font-size:10px" id="rv-rpm-${r.id}">0</span>
-      </div>
-      <div class="rrow-gear" id="rv-gear-${r.id}">–</div>
-      <div class="rrow-delta" id="rv-delta-${r.id}"></div>
-      <div class="rrow-bars">
-        <div class="mini-bar-wrap">
-          <div class="mini-bar-track"><div class="mini-bar-fill mb-thr" id="rv-thr-${r.id}"></div></div>
-          <div class="mini-bar-track"><div class="mini-bar-fill mb-brk" id="rv-brk-${r.id}"></div></div>
+      <div class="rrow-body">
+        <div class="rrow-top">
+          <div class="rrow-stripe" style="background:${r.color}"></div>
+          <div class="rrow-name">${r.filename.replace(/\.csv$/i,'').substring(0,26)}</div>
+          <div class="rrow-mph" style="color:${r.color}"><span id="rv-mph-${r.id}">0</span><span class="rrow-mph-unit"> mph</span></div>
+          <div class="rrow-gear" id="rv-gear-${r.id}">–</div>
+          <div class="rrow-right">
+            <div class="rrow-rpm"><span id="rv-rpm-${r.id}">0</span> <span style="font-size:9px">rpm</span></div>
+            <div class="rrow-delta" id="rv-delta-${r.id}"></div>
+          </div>
         </div>
-        <div class="rrow-sector" id="rv-sec-${r.id}"></div>
+        <div class="rrow-bot">
+          <div class="bar-row">
+            <span class="bar-label" style="color:var(--green)">THR</span>
+            <div class="bar-track"><div class="bar-fill bar-thr" id="rv-thr-${r.id}"></div></div>
+            <span class="bar-pct" style="color:var(--green)" id="rv-thr-pct-${r.id}">0%</span>
+          </div>
+          <div class="bar-row">
+            <span class="bar-label" style="color:var(--red)">BRK</span>
+            <div class="bar-track"><div class="bar-fill bar-brk" id="rv-brk-${r.id}"></div></div>
+            <span class="bar-pct" style="color:var(--red)" id="rv-brk-pct-${r.id}">0%</span>
+          </div>
+          <div class="rrow-sector" id="rv-sec-${r.id}"></div>
+        </div>
       </div>
     </div>`).join('');
 }
@@ -754,19 +769,26 @@ function updateAllDisplays() {
     }
 
     // Live metric row
-    const mph  = document.getElementById(`rv-mph-${run.id}`);
-    const rpm  = document.getElementById(`rv-rpm-${run.id}`);
-    const gear = document.getElementById(`rv-gear-${run.id}`);
-    const thr  = document.getElementById(`rv-thr-${run.id}`);
-    const brk  = document.getElementById(`rv-brk-${run.id}`);
-    const sec  = document.getElementById(`rv-sec-${run.id}`);
-    const delt = document.getElementById(`rv-delta-${run.id}`);
+    const mph    = document.getElementById(`rv-mph-${run.id}`);
+    const rpm    = document.getElementById(`rv-rpm-${run.id}`);
+    const gear   = document.getElementById(`rv-gear-${run.id}`);
+    const thr    = document.getElementById(`rv-thr-${run.id}`);
+    const thrPct = document.getElementById(`rv-thr-pct-${run.id}`);
+    const brk    = document.getElementById(`rv-brk-${run.id}`);
+    const brkPct = document.getElementById(`rv-brk-pct-${run.id}`);
+    const sec    = document.getElementById(`rv-sec-${run.id}`);
+    const delt   = document.getElementById(`rv-delta-${run.id}`);
 
-    if (mph)  mph.textContent  = Math.round(d.mph||0);
-    if (rpm)  rpm.textContent  = Math.round(d.rpm||0);
-    if (gear) gear.textContent = d.gear!=null?(d.gear===0?'N':d.gear):'–';
-    if (thr)  thr.style.width  = `${Math.min(100,d.thr||0)}%`;
-    if (brk)  brk.style.width  = `${Math.min(100,(d.brk||0)/globalMaxBrk*100)}%`;
+    const thrV = Math.min(100, d.thr||0);
+    const brkV = Math.min(100, (d.brk||0)/globalMaxBrk*100);
+
+    if (mph)    mph.textContent    = Math.round(d.mph||0);
+    if (rpm)    rpm.textContent    = Math.round(d.rpm||0).toLocaleString();
+    if (gear)   gear.textContent   = d.gear!=null?(d.gear===0?'N':d.gear):'–';
+    if (thr)    thr.style.width    = `${thrV}%`;
+    if (thrPct) thrPct.textContent = `${Math.round(thrV)}%`;
+    if (brk)    brk.style.width    = `${brkV}%`;
+    if (brkPct) brkPct.textContent = `${Math.round(brkV)}%`;
 
     // Current sector indicator
     if (sec && run.sectorTimes.length) {
