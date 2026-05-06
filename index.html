@@ -467,6 +467,7 @@ function extractLaps(data) {
    RUN HELPERS
 ════════════════════════════════════════════════════════ */
 function getLapT(run, i) { return run.lapData[i].t - run.lapT0; }
+function runT(r) { return Math.min(Math.max(syncedTime - r.timeOffset, 0), r.lapDuration); }
 
 function findLapIdx(run, targetLt) {
   const target = targetLt + run.lapT0;
@@ -481,6 +482,7 @@ function setRunLap(run, lapIdx) {
   run.lapT0 = run.lapData[0].t;
   run.lapDuration = run.lapData[run.lapData.length - 1].t - run.lapT0;
   run.currentIdx = 0;
+  run.timeOffset = 0;
   run.sectorTimes = [];
   gHistories[run.id] = [];
 }
@@ -560,6 +562,7 @@ function applyTrim() {
     r.lapT0      = r.lapData[0].t;
     r.lapDuration= r.lapData[r.lapData.length - 1].t - r.lapT0;
     r.currentIdx = 0;
+    r.timeOffset = 0;
     gHistories[r.id] = [];
   });
   syncedTime = 0;
@@ -745,6 +748,25 @@ function toggleTiles() {
 const trackLayer = L.layerGroup().addTo(map);
 const markerLayer = L.layerGroup().addTo(map);
 const sectorLayer = L.layerGroup().addTo(map);
+
+map.on('click', function(e) {
+  if (!runs.length) return;
+  if (isPlaying) { isPlaying = false; lastTs = null; cancelAnimationFrame(rafId); updatePlayBtn(); }
+  // Anchor syncedTime to the baseline run's closest point
+  const base = getBaselineRun() || runs[0];
+  const baseIdx = findClosestIdx(base.lapData, e.latlng.lat, e.latlng.lng);
+  syncedTime = getLapT(base, baseIdx);
+  // Each run independently seeks to its own closest GPS point,
+  // storing an offset so playback stays location-aligned
+  runs.forEach(r => {
+    const idx = findClosestIdx(r.lapData, e.latlng.lat, e.latlng.lng);
+    r.currentIdx  = idx;
+    r.timeOffset  = syncedTime - getLapT(r, idx);
+    gHistories[r.id] = [];
+  });
+  document.getElementById('time-slider').value = syncedTime;
+  updateAllDisplays();
+});
 
 function buildRunTrack(run) {
   run.polylines.forEach(p => trackLayer.removeLayer(p));
@@ -1122,12 +1144,11 @@ function animLoop(ts) {
   if (!isPlaying) return;
   if (lastTs !== null) syncedTime += (ts - lastTs) * playbackSpeed;
   lastTs = ts;
-  if (syncedTime >= maxDuration) {
-    syncedTime = maxDuration; isPlaying = false; lastTs = null; updatePlayBtn();
+  const stopAt = Math.max(...runs.map(r => r.lapDuration + r.timeOffset));
+  if (syncedTime >= stopAt) {
+    syncedTime = stopAt; isPlaying = false; lastTs = null; updatePlayBtn();
   }
-  runs.forEach(r => {
-    r.currentIdx = findLapIdx(r, Math.min(syncedTime, r.lapDuration));
-  });
+  runs.forEach(r => { r.currentIdx = findLapIdx(r, runT(r)); });
   updateAllDisplays();
   if (isPlaying) rafId = requestAnimationFrame(animLoop);
 }
@@ -1136,7 +1157,8 @@ function togglePlay() {
   if (!runs.length) return;
   if (isPlaying) { isPlaying=false; lastTs=null; cancelAnimationFrame(rafId); }
   else {
-    if (syncedTime >= maxDuration) { syncedTime=0; runs.forEach(r=>{r.currentIdx=0; gHistories[r.id]=[];}); }
+    const stopAt = Math.max(...runs.map(r => r.lapDuration + r.timeOffset));
+    if (syncedTime >= stopAt) { syncedTime=0; runs.forEach(r=>{r.timeOffset=0; r.currentIdx=0; gHistories[r.id]=[];}); }
     isPlaying=true; rafId=requestAnimationFrame(animLoop);
   }
   updatePlayBtn();
@@ -1144,7 +1166,7 @@ function togglePlay() {
 
 function stopPlay() {
   isPlaying=false; lastTs=null; cancelAnimationFrame(rafId); syncedTime=0;
-  runs.forEach(r=>{r.currentIdx=0; gHistories[r.id]=[];});
+  runs.forEach(r=>{r.timeOffset=0; r.currentIdx=0; gHistories[r.id]=[];});
   updatePlayBtn(); if (runs.length) updateAllDisplays();
 }
 
@@ -1167,6 +1189,7 @@ document.addEventListener('touchend', ()=>{ sliderDragging=false; });
 slider.addEventListener('input', e => {
   syncedTime = parseFloat(e.target.value);
   runs.forEach(r => {
+    r.timeOffset = 0;
     r.currentIdx = findLapIdx(r, Math.min(syncedTime, r.lapDuration));
     gHistories[r.id] = [];
   });
@@ -1195,6 +1218,7 @@ function addRun(allData, filename) {
     lapDuration:   0,
     sectorTimes:   [],
     currentIdx:    0,
+    timeOffset:    0,
     polylines:     [],
     marker:        null,
   };
