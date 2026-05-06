@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Run Viewer – Compare</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0d1117; --panel: #161b22; --border: #30363d;
+  --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff;
+  --green: #2ea043; --red: #f85149; --orange: #f0883e; --yellow: #d29922;
+}
+html, body { height: 100%; background: var(--bg); color: var(--text);
+             font-family: 'Segoe UI', system-ui, sans-serif; overflow: hidden; }
+
+/* ── Header ── */
+#header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 12px; background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  height: 50px; flex-shrink: 0; overflow: hidden;
+}
+#header h1 { font-size: 14px; font-weight: 700; letter-spacing: 1px;
+             color: var(--accent); white-space: nowrap; flex-shrink: 0; }
+#pills-wrap { display: flex; gap: 6px; flex: 1; overflow-x: auto;
+              align-items: center; min-width: 0; padding: 4px 0;
+              scrollbar-width: none; }
+#pills-wrap::-webkit-scrollbar { display: none; }
+.rpill {
+  display: flex; align-items: center; gap: 5px;
+  border: 1.5px solid; border-radius: 20px;
+  padding: 3px 8px 3px 6px; flex-shrink: 0;
+  background: rgba(255,255,255,.04); font-size: 12px;
+}
+.rpill-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.rpill-name { max-width: 110px; overflow: hidden; text-overflow: ellipsis;
+              white-space: nowrap; color: var(--text); }
+.rpill-lap {
+  background: transparent; border: none; color: var(--muted);
+  font-size: 11px; cursor: pointer; padding: 0 2px;
+}
+.rpill-lap option { background: var(--panel); }
+.rpill-del {
+  background: none; border: none; color: var(--muted); cursor: pointer;
+  font-size: 14px; line-height: 1; padding: 0 2px; margin-left: 1px;
+}
+.rpill-del:hover { color: var(--red); }
+#add-btn {
+  flex-shrink: 0; padding: 5px 12px; background: var(--accent);
+  color: #000; border: none; border-radius: 6px; font-weight: 600;
+  cursor: pointer; font-size: 12px;
+}
+#add-btn:hover { opacity: .85; }
+#file-input { display: none; }
+
+/* ── Layout ── */
+#body { display: flex; flex-direction: column; height: calc(100vh - 50px - 52px); }
+#content { display: flex; flex: 1; overflow: hidden; }
+#map { flex: 1; min-width: 0; }
+
+/* ── Right panel ── */
+#panel {
+  width: 330px; flex-shrink: 0; background: var(--panel);
+  border-left: 1px solid var(--border);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.panel-sec { border-bottom: 1px solid var(--border); }
+.panel-sec-title {
+  font-size: 10px; font-weight: 600; letter-spacing: 1px;
+  text-transform: uppercase; color: var(--muted);
+  padding: 6px 10px 4px;
+}
+
+/* ── Run rows ── */
+#run-rows { flex-shrink: 0; overflow: hidden; }
+.rrow {
+  display: grid;
+  grid-template-columns: 10px 1fr 46px 44px 14px;
+  grid-template-rows: auto auto;
+  column-gap: 7px; row-gap: 2px;
+  padding: 6px 10px 5px;
+  border-bottom: 1px solid rgba(48,54,61,.5);
+}
+.rrow-stripe { grid-column: 1; grid-row: 1 / 3;
+               width: 3px; border-radius: 2px; align-self: stretch; }
+.rrow-name { grid-column: 2; grid-row: 1;
+             font-size: 11px; font-weight: 600; color: var(--text);
+             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rrow-vals { grid-column: 3; grid-row: 1;
+             font-size: 11px; color: var(--text); font-variant-numeric: tabular-nums;
+             white-space: nowrap; text-align: right; }
+.rrow-gear { grid-column: 4; grid-row: 1;
+             font-size: 20px; font-weight: 800; color: var(--orange);
+             text-align: center; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.rrow-delta { grid-column: 5; grid-row: 1 / 3; font-size: 10px;
+              font-weight: 700; text-align: right; align-self: center;
+              font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rrow-bars { grid-column: 2 / 5; grid-row: 2;
+             display: flex; gap: 4px; align-items: center; }
+.mini-bar-wrap { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.mini-bar-track { height: 5px; background: #1c2128; border-radius: 2px; overflow: hidden; }
+.mini-bar-fill { height: 100%; width: 0; border-radius: 2px; transition: width .05s; }
+.mb-thr { background: var(--green); }
+.mb-brk { background: var(--red); }
+.rrow-sector { font-size: 10px; color: var(--muted); white-space: nowrap;
+               align-self: center; flex-shrink: 0; min-width: 28px; text-align: right; }
+
+/* ── Sector table ── */
+#sector-wrap { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+#sector-scroll { flex: 1; overflow: auto; }
+#sector-msg { font-size: 11px; color: var(--muted); padding: 10px 10px; line-height: 1.5; }
+#stbl { width: 100%; border-collapse: collapse; font-size: 11px; }
+#stbl th { position: sticky; top: 0; background: var(--panel);
+           padding: 4px 6px; text-align: right; font-weight: 600;
+           border-bottom: 1px solid var(--border); white-space: nowrap; }
+#stbl th:first-child { text-align: left; min-width: 28px; }
+#stbl td { padding: 3px 6px; text-align: right; border-bottom: 1px solid rgba(48,54,61,.4);
+           font-variant-numeric: tabular-nums; white-space: nowrap; }
+#stbl td:first-child { text-align: left; color: var(--muted); font-weight: 600; }
+#stbl .sc-best { font-weight: 700; }
+#stbl .sc-active { background: rgba(255,255,255,.06); }
+#stbl .sc-delta { font-size: 10px; display: block; }
+#stbl .sc-delta.pos { color: var(--red); }
+#stbl .sc-delta.neg { color: var(--green); }
+#stbl .total-row td { border-top: 1px solid var(--border);
+                       border-bottom: none; font-weight: 600; padding-top: 5px; }
+
+/* ── G-force ── */
+#gforce-sec { flex-shrink: 0; display: flex; flex-direction: column; align-items: center;
+              padding: 6px 0 8px; }
+#gforce-canvas { width: 260px; height: 260px; background: #0a0e14; border-radius: 4px; }
+
+/* ── Controls ── */
+#controls {
+  height: 52px; background: var(--panel); border-top: 1px solid var(--border);
+  display: flex; align-items: center; gap: 10px; padding: 0 14px;
+}
+.ctrl-btn {
+  padding: 5px 11px; border: 1px solid var(--border); background: transparent;
+  color: var(--text); border-radius: 6px; cursor: pointer; font-size: 13px;
+  transition: all .15s; white-space: nowrap; flex-shrink: 0;
+}
+.ctrl-btn:hover { background: var(--border); }
+.ctrl-btn:disabled { opacity: .3; cursor: default; }
+#play-btn { border-color: var(--accent); color: var(--accent); }
+#play-btn.playing { border-color: var(--yellow); color: var(--yellow); }
+#time-slider { flex: 1; accent-color: var(--accent); cursor: pointer; min-width: 0; }
+.time-disp { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums;
+             white-space: nowrap; min-width: 66px; text-align: center; }
+.spd-btns { display: flex; gap: 3px; flex-shrink: 0; }
+.spd-btn {
+  padding: 3px 7px; border: 1px solid var(--border); background: transparent;
+  color: var(--muted); border-radius: 4px; cursor: pointer; font-size: 11px;
+}
+.spd-btn.active { border-color: var(--accent); color: var(--accent);
+                  background: rgba(88,166,255,.1); }
+
+/* ── Map overlays ── */
+#map-toggle {
+  position: absolute; top: 10px; right: 10px; z-index: 1000;
+  background: rgba(22,27,34,.85); border: 1px solid var(--border);
+  border-radius: 6px; padding: 4px 10px; font-size: 12px;
+  color: var(--text); cursor: pointer; backdrop-filter: blur(4px);
+}
+.sec-marker {
+  width: 20px; height: 20px; border-radius: 50%;
+  background: rgba(255,215,0,.92); border: 2px solid #000;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px; font-weight: 900; color: #000;
+  box-shadow: 0 1px 5px rgba(0,0,0,.7);
+}
+
+/* ── Upload overlay ── */
+#overlay {
+  position: fixed; inset: 0; background: rgba(13,17,23,.93);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 9999; flex-direction: column; gap: 14px;
+}
+#overlay.hidden { display: none; }
+.drop-zone {
+  border: 2px dashed var(--accent); border-radius: 16px;
+  padding: 44px 60px; text-align: center; cursor: pointer; transition: all .2s;
+}
+.drop-zone.dragover { background: rgba(88,166,255,.08); border-style: solid; }
+.drop-icon { font-size: 44px; margin-bottom: 14px; }
+.drop-title { font-size: 19px; font-weight: 600; margin-bottom: 6px; }
+.drop-sub { font-size: 13px; color: var(--muted); }
+#progress-msg { font-size: 13px; color: var(--yellow); min-height: 18px; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>⏱ COMPARE</h1>
+  <div id="pills-wrap"></div>
+  <button id="add-btn" onclick="document.getElementById('file-input').click()">+ Add Run</button>
+  <input type="file" id="file-input" accept=".csv" multiple/>
+</div>
+
+<div id="body">
+  <div id="content">
+
+    <div id="map">
+      <button id="map-toggle" onclick="toggleTiles()">🛰 Satellite</button>
+    </div>
+
+    <div id="panel">
+
+      <!-- Live metrics rows (one per run) -->
+      <div class="panel-sec" id="run-rows-sec">
+        <div class="panel-sec-title">Live Metrics</div>
+        <div id="run-rows"></div>
+      </div>
+
+      <!-- Sector comparison table -->
+      <div class="panel-sec" id="sector-wrap" style="flex:1;display:flex;flex-direction:column;min-height:0;">
+        <div class="panel-sec-title">
+          Sector Analysis
+          <span id="sec-info" style="font-size:9px;color:var(--muted);margin-left:4px;font-weight:400;"></span>
+        </div>
+        <div id="sector-scroll" style="flex:1;overflow:auto;">
+          <div id="sector-msg" style="display:none;"></div>
+          <table id="stbl" style="display:none;"></table>
+        </div>
+      </div>
+
+      <!-- G-force: all runs overlaid -->
+      <div class="panel-sec" id="gforce-sec">
+        <div class="panel-sec-title">G-Force</div>
+        <canvas id="gforce-canvas" width="260" height="260"></canvas>
+      </div>
+
+    </div>
+  </div>
+
+  <div id="controls">
+    <button class="ctrl-btn" id="stop-btn" onclick="stopPlay()" disabled>■</button>
+    <button class="ctrl-btn" id="play-btn" onclick="togglePlay()" disabled>▶ Play</button>
+    <input type="range" id="time-slider" min="0" max="100" value="0" step="1"/>
+    <span class="time-disp" id="time-disp">0:00.000</span>
+    <div class="spd-btns">
+      <button class="spd-btn active" onclick="setSpeed(1)">1×</button>
+      <button class="spd-btn" onclick="setSpeed(2)">2×</button>
+      <button class="spd-btn" onclick="setSpeed(5)">5×</button>
+      <button class="spd-btn" onclick="setSpeed(10)">10×</button>
+    </div>
+  </div>
+</div>
+
+<div id="overlay">
+  <div class="drop-zone" id="drop-zone"
+       onclick="document.getElementById('file-input').click()">
+    <div class="drop-icon">🏎</div>
+    <div class="drop-title">Drop run CSV files here</div>
+    <div class="drop-sub">Drop multiple files at once — no server required</div>
+  </div>
+  <div id="progress-msg"></div>
+</div>
+
+<script>
+/* ════════════════════════════════════════════════════════
+   CONSTANTS & STATE
+════════════════════════════════════════════════════════ */
+const RUN_COLORS = ['#00bfff','#ff8c00','#39d353','#bf91f3',
+                    '#ff6b9d','#ffd700','#00ff9f','#ff4500'];
+const MAX_SECTORS = 12;
+let ridCounter = 0;
+
+let runs = [];            // Run objects (see structure below)
+let sectors = [];         // [{lat, lon}] — cluster centroids
+let sectorMarkers = [];   // Leaflet marker objects
+let syncedTime = 0;       // current playback position in ms (lap-zeroed)
+let maxDuration = 0;      // max lap duration across all active runs
+let isPlaying = false, playbackSpeed = 1;
+let rafId = null, lastTs = null, sliderDragging = false;
+let globalMaxBrk = 10000, globalMaxRpm = 9000;
+const gHistories = {};    // rid → [{x,y}]
+const G_HIST = 60;
+
+/* ════════════════════════════════════════════════════════
+   CSV PARSING (identical to single-run version)
+════════════════════════════════════════════════════════ */
+const COL_MAP = {
+  'LAT (deg)':'lat','LONG (deg)':'lon','SPEED (m/s)':'spd','RPM':'rpm',
+  'THROTTLE (%)':'thr','BRAKES (kPa)':'brk','STEERING (deg)':'str',
+  'GEAR_NUMBER':'gear','MATH_ELAPSED_TIME':'t','MATH_LAP_NUMBER':'lap',
+  'MATH_CALC_ACCEL_X':'cax','MATH_CALC_ACCEL_Y':'cay',
+  'ACCEL_X (m/s^2)':'ax','ACCEL_Y (m/s^2)':'ay',
+};
+
+function parseRunCSV(text) {
+  const firstNL = text.indexOf('\n');
+  const headers = text.substring(0, firstNL).replace(/\r$/,'').split(',');
+  const idxMap = {};
+  for (const [csv, short] of Object.entries(COL_MAP)) {
+    const i = headers.indexOf(csv); if (i >= 0) idxMap[short] = i;
+  }
+  const data = []; let pos = firstNL + 1;
+  while (pos < text.length) {
+    let end = text.indexOf('\n', pos); if (end < 0) end = text.length;
+    const line = text.substring(pos, end).replace(/\r$/,''); pos = end + 1;
+    if (!line) continue;
+    const vals = line.split(',');
+    const pt = {}; let ok = false;
+    for (const [short, idx] of Object.entries(idxMap)) {
+      const v = +vals[idx];
+      if (!isNaN(v)) { pt[short] = v; if (short==='lat'||short==='lon') ok=true; }
+    }
+    if (ok) data.push(pt);
+  }
+  return data;
+}
+
+function processData(raw) {
+  if (!raw.length) return raw;
+  const t0 = raw[0].t ?? 0;
+  raw.forEach(d => { d.t = (d.t ?? 0) - t0; });
+  raw.forEach(d => {
+    d.mph = d.spd != null ? Math.round(d.spd * 223.694) / 100 : 0; delete d.spd;
+  });
+  raw.forEach(d => {
+    const ax = d.cax ?? d.ax ?? null, ay = d.cay ?? d.ay ?? null;
+    if (ax != null) d.glat = Math.round(ax / 9.81 * 1000) / 1000;
+    if (ay != null) d.glon = Math.round(ay / 9.81 * 1000) / 1000;
+    delete d.cax; delete d.cay; delete d.ax; delete d.ay;
+  });
+  return raw;
+}
+
+/* ════════════════════════════════════════════════════════
+   LAP EXTRACTION
+════════════════════════════════════════════════════════ */
+function extractLaps(data) {
+  const hasLap = data.some(d => d.lap != null && !isNaN(d.lap));
+  if (!hasLap) return [{ num: 'Full', data }];
+  const map = new Map();
+  for (const d of data) {
+    const n = Math.round(d.lap ?? 1);
+    if (!map.has(n)) map.set(n, []);
+    map.get(n).push(d);
+  }
+  return [...map.entries()]
+    .sort((a,b) => a[0]-b[0])
+    .map(([num, pts]) => ({ num, data: pts }))
+    .filter(l => l.data.length > 20);
+}
+
+/* ════════════════════════════════════════════════════════
+   RUN HELPERS
+════════════════════════════════════════════════════════ */
+function getLapT(run, i) { return run.lapData[i].t - run.lapT0; }
+
+function findLapIdx(run, targetLt) {
+  const target = targetLt + run.lapT0;
+  const ld = run.lapData; let lo = 0, hi = ld.length - 1;
+  while (lo < hi) { const m=(lo+hi+1)>>1; if(ld[m].t<=target) lo=m; else hi=m-1; }
+  return lo;
+}
+
+function setRunLap(run, lapIdx) {
+  run.selectedLapIdx = lapIdx;
+  run.lapData = run.laps[lapIdx].data;
+  run.lapT0 = run.lapData[0].t;
+  run.lapDuration = run.lapData[run.lapData.length - 1].t - run.lapT0;
+  run.currentIdx = 0;
+  run.sectorTimes = [];
+  gHistories[run.id] = [];
+}
+
+function getFastestRun() {
+  return runs.reduce((b, r) => (r.lapDuration < (b?.lapDuration ?? Infinity) ? r : b), null);
+}
+
+function recomputeGlobalMeta() {
+  globalMaxBrk = 1; globalMaxRpm = 1;
+  for (const r of runs) for (const d of r.lapData) {
+    if ((d.brk||0) > globalMaxBrk) globalMaxBrk = d.brk;
+    if ((d.rpm||0) > globalMaxRpm) globalMaxRpm = d.rpm;
+  }
+  globalMaxBrk = Math.max(globalMaxBrk, 500);
+  globalMaxRpm = Math.max(globalMaxRpm, 9000);
+  maxDuration = Math.max(...runs.map(r => r.lapDuration), 0);
+  const sl = document.getElementById('time-slider');
+  sl.max = maxDuration; sl.value = Math.min(syncedTime, maxDuration);
+}
+
+/* ════════════════════════════════════════════════════════
+   SECTOR DETECTION
+════════════════════════════════════════════════════════ */
+// Detect where drivers apply throttle after braking — these
+// become the sector measurement gates on the track.
+function detectSectors() {
+  const ON_THR  = 55,  OFF_THR  = 15;
+  const MIN_OFF_MS = 400, MIN_SEP_MS = 2500;
+  const CLUSTER_DEG = 0.0005; // ~50 m
+
+  const allEvents = [];
+  for (const run of runs) {
+    const ld = run.lapData;
+    let offSince = null, lastEvt = -Infinity;
+    for (let i = 1; i < ld.length; i++) {
+      const thr = ld[i].thr ?? 0, prev = ld[i-1].thr ?? 0;
+      const lt = getLapT(run, i);
+      if (prev >= OFF_THR && thr < OFF_THR) offSince = lt;
+      if (prev <= ON_THR && thr > ON_THR && offSince !== null) {
+        if (lt - offSince >= MIN_OFF_MS && lt - lastEvt >= MIN_SEP_MS) {
+          allEvents.push({ lat: ld[i].lat, lon: ld[i].lon, lt });
+          lastEvt = lt;
+        }
+        offSince = null;
+      }
+    }
+  }
+
+  // Greedy GPS clustering
+  const clusters = [];
+  for (const ev of allEvents) {
+    let best = null, bestD = Infinity;
+    for (const cl of clusters) {
+      const d = Math.hypot(cl.lat - ev.lat, cl.lon - ev.lon);
+      if (d < CLUSTER_DEG && d < bestD) { bestD = d; best = cl; }
+    }
+    if (best) {
+      best.events.push(ev);
+      best.lat = best.events.reduce((s,e)=>s+e.lat,0)/best.events.length;
+      best.lon = best.events.reduce((s,e)=>s+e.lon,0)/best.events.length;
+    } else {
+      clusters.push({ lat: ev.lat, lon: ev.lon, events: [ev] });
+    }
+  }
+
+  if (!clusters.length) { sectors = []; return; }
+
+  // Sort clusters by order in the first run (track position)
+  const ref = runs[0];
+  clusters.forEach(cl => { cl.refIdx = findNearestMapIdx(ref.lapData, cl.lat, cl.lon); });
+  clusters.sort((a,b) => a.refIdx - b.refIdx);
+
+  // If > MAX_SECTORS, keep the ones with the most votes (run coverage)
+  let chosen = clusters;
+  if (chosen.length > MAX_SECTORS) {
+    chosen = [...clusters].sort((a,b) => b.events.length - a.events.length)
+                          .slice(0, MAX_SECTORS)
+                          .sort((a,b) => a.refIdx - b.refIdx);
+  }
+
+  sectors = chosen.map(cl => ({ lat: cl.lat, lon: cl.lon }));
+}
+
+function findNearestMapIdx(lapData, lat, lon) {
+  let best = 0, bestD = Infinity;
+  for (let i = 0; i < lapData.length; i++) {
+    const d = (lapData[i].lat-lat)**2 + (lapData[i].lon-lon)**2;
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  return best;
+}
+
+/* ════════════════════════════════════════════════════════
+   SECTOR TIMES PER RUN
+════════════════════════════════════════════════════════ */
+function computeRunSectorTimes(run) {
+  if (!sectors.length) { run.sectorTimes = []; return; }
+  const ld = run.lapData, n = ld.length;
+  const gateIdxs = sectors.map(s => findNearestMapIdx(ld, s.lat, s.lon));
+  const gates = [0, ...gateIdxs, n-1];
+  const times = [];
+  for (let i = 0; i < gates.length - 1; i++) {
+    const t1 = getLapT(run, gates[i]), t2 = getLapT(run, gates[i+1]);
+    times.push({ t_start: t1, t_end: t2, duration: t2 - t1 });
+  }
+  run.sectorTimes = times;
+}
+
+function recomputeAllSectorTimes() {
+  detectSectors();
+  for (const run of runs) computeRunSectorTimes(run);
+  placeSectorMarkers();
+  renderSectorTable();
+}
+
+/* ════════════════════════════════════════════════════════
+   LEAFLET MAP
+════════════════════════════════════════════════════════ */
+const cartoTile = L.tileLayer(
+  'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+  { attribution: '© OSM © CARTO', maxZoom: 19 });
+const satTile = L.tileLayer(
+  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  { attribution: 'Tiles © Esri', maxZoom: 19 });
+const map = L.map('map', { layers: [cartoTile] });
+let usingSat = false;
+
+function toggleTiles() {
+  if (usingSat) { map.removeLayer(satTile); map.addLayer(cartoTile);
+    document.getElementById('map-toggle').textContent='🛰 Satellite'; }
+  else { map.removeLayer(cartoTile); map.addLayer(satTile);
+    document.getElementById('map-toggle').textContent='🗺 Dark Map'; }
+  usingSat = !usingSat;
+}
+
+const trackLayer = L.layerGroup().addTo(map);
+const markerLayer = L.layerGroup().addTo(map);
+const sectorLayer = L.layerGroup().addTo(map);
+
+function buildRunTrack(run) {
+  run.polylines.forEach(p => trackLayer.removeLayer(p));
+  run.polylines = [];
+  const cv = L.canvas({ padding: 0.5 });
+  // Color the track by the run's own color (solid, not speed-gradient)
+  // so multiple overlapping runs remain identifiable
+  L.polyline(run.lapData.map(d => [d.lat, d.lon]), {
+    color: run.color, weight: 3, opacity: 0.75, renderer: cv
+  }).addTo(trackLayer);
+  run.polylines.push(cv);
+
+  // Marker
+  if (run.marker) markerLayer.removeLayer(run.marker);
+  const icon = L.divIcon({
+    html: `<div style="width:13px;height:13px;background:${run.color};border:2px solid #fff;
+                       border-radius:50%;box-shadow:0 0 6px ${run.color};"></div>`,
+    iconSize:[13,13], iconAnchor:[6,6], className:''
+  });
+  run.marker = L.marker([run.lapData[0].lat, run.lapData[0].lon], { icon })
+                 .addTo(markerLayer);
+}
+
+function fitMapToAllRuns() {
+  if (!runs.length) return;
+  const lats = runs.flatMap(r => r.lapData.map(d => d.lat));
+  const lons = runs.flatMap(r => r.lapData.map(d => d.lon));
+  map.fitBounds([[Math.min(...lats),Math.min(...lons)],
+                 [Math.max(...lats),Math.max(...lons)]], { padding:[24,24] });
+}
+
+function placeSectorMarkers() {
+  sectorLayer.clearLayers();
+  sectorMarkers = [];
+  sectors.forEach((s, i) => {
+    const icon = L.divIcon({
+      html: `<div class="sec-marker">${i+1}</div>`,
+      iconSize:[20,20], iconAnchor:[10,10], className:''
+    });
+    const m = L.marker([s.lat, s.lon], { icon }).addTo(sectorLayer);
+    sectorMarkers.push(m);
+  });
+}
+
+/* ════════════════════════════════════════════════════════
+   SECTOR TABLE RENDERING
+════════════════════════════════════════════════════════ */
+function renderSectorTable() {
+  const msg = document.getElementById('sector-msg');
+  const tbl = document.getElementById('stbl');
+  const info = document.getElementById('sec-info');
+
+  if (!runs.length) {
+    msg.style.display='none'; tbl.style.display='none'; return;
+  }
+  if (!sectors.length) {
+    const hasThr = runs.some(r => r.lapData.some(d => d.thr != null));
+    msg.textContent = hasThr
+      ? 'No sector boundaries detected. Try loading runs with more varied throttle/brake usage.'
+      : 'Throttle data not available for sector detection.';
+    msg.style.display='block'; tbl.style.display='none';
+    info.textContent=''; return;
+  }
+
+  const N = runs[0].sectorTimes.length; // sectors.length + 1
+  info.textContent = `${sectors.length} boundaries · ${N} sectors`;
+  msg.style.display='none'; tbl.style.display='';
+
+  // Per-sector fastest time (for delta colouring)
+  const fastest = Array.from({length: N}, (_,i) =>
+    Math.min(...runs.map(r => r.sectorTimes[i]?.duration ?? Infinity)));
+
+  let h = '<thead><tr><th>Sec</th>';
+  runs.forEach(r => { h += `<th style="color:${r.color}">${shortName(r.filename)}</th>`; });
+  h += '</tr></thead><tbody>';
+
+  for (let i = 0; i < N; i++) {
+    h += `<tr data-sec="${i}"><td>S${i+1}</td>`;
+    runs.forEach(r => {
+      const st = r.sectorTimes[i];
+      if (!st) { h += `<td data-sc-rid="${r.id}" data-sc-idx="${i}">—</td>`; return; }
+      const isBest = Math.abs(st.duration - fastest[i]) < 1;
+      const delta = st.duration - fastest[i];
+      const dStr = delta > 0.5
+        ? `<span class="sc-delta pos">+${(delta/1000).toFixed(3)}</span>` : '';
+      h += `<td class="stcell${isBest?' sc-best':''}" `
+         + `data-sc-rid="${r.id}" data-sc-idx="${i}" `
+         + `style="color:${isBest?r.color:'var(--muted)'}">`
+         + `${(st.duration/1000).toFixed(3)}${dStr}</td>`;
+    });
+    h += '</tr>';
+  }
+
+  // Total row
+  h += '<tr class="total-row"><td>LAP</td>';
+  const fastestTotal = Math.min(...runs.map(r => r.lapDuration));
+  runs.forEach(r => {
+    const isBest = Math.abs(r.lapDuration - fastestTotal) < 1;
+    const delta = r.lapDuration - fastestTotal;
+    const dStr = delta > 0.5
+      ? `<span class="sc-delta pos">+${(delta/1000).toFixed(3)}</span>` : '';
+    h += `<td style="color:${isBest?r.color:'var(--muted)'}">`
+       + `${fmtTime(r.lapDuration)}${dStr}</td>`;
+  });
+  h += '</tr></tbody>';
+  tbl.innerHTML = h;
+}
+
+function updateSectorHighlight() {
+  if (!sectors.length || !runs.length) return;
+  runs.forEach(run => {
+    const lt = getLapT(run, run.currentIdx);
+    let cur = 0;
+    for (let i = 0; i < run.sectorTimes.length; i++) {
+      if (lt >= run.sectorTimes[i].t_start) cur = i; else break;
+    }
+    document.querySelectorAll(`[data-sc-rid="${run.id}"]`).forEach((el, i) => {
+      el.classList.toggle('sc-active', i === cur);
+    });
+  });
+}
+
+/* ════════════════════════════════════════════════════════
+   LIVE METRIC ROWS RENDERING
+════════════════════════════════════════════════════════ */
+function renderRunRows() {
+  const wrap = document.getElementById('run-rows');
+  if (!runs.length) { wrap.innerHTML=''; return; }
+  wrap.innerHTML = runs.map(r => `
+    <div class="rrow" id="rrow-${r.id}">
+      <div class="rrow-stripe" style="background:${r.color}"></div>
+      <div class="rrow-name">${r.filename.replace(/\.csv$/i,'').substring(0,28)}</div>
+      <div class="rrow-vals">
+        <span id="rv-mph-${r.id}" style="color:${r.color}">0</span><span style="font-size:9px;color:var(--muted)">mph</span>
+        <span style="margin-left:5px;color:var(--muted);font-size:10px" id="rv-rpm-${r.id}">0</span>
+      </div>
+      <div class="rrow-gear" id="rv-gear-${r.id}">–</div>
+      <div class="rrow-delta" id="rv-delta-${r.id}"></div>
+      <div class="rrow-bars">
+        <div class="mini-bar-wrap">
+          <div class="mini-bar-track"><div class="mini-bar-fill mb-thr" id="rv-thr-${r.id}"></div></div>
+          <div class="mini-bar-track"><div class="mini-bar-fill mb-brk" id="rv-brk-${r.id}"></div></div>
+        </div>
+        <div class="rrow-sector" id="rv-sec-${r.id}"></div>
+      </div>
+    </div>`).join('');
+}
+
+function renderPills() {
+  const wrap = document.getElementById('pills-wrap');
+  wrap.innerHTML = runs.map(r => {
+    const lapOpts = r.laps.map((l,i) =>
+      `<option value="${i}"${i===r.selectedLapIdx?' selected':''}>`
+      + `${l.num==='Full'?'Full run':`Lap ${l.num}`}`
+      + ` (${fmtTime(l.data[l.data.length-1].t - l.data[0].t)})`
+      + `</option>`).join('');
+    const lapSel = r.laps.length > 1
+      ? `<select class="rpill-lap" onchange="changeLap('${r.id}',+this.value)">${lapOpts}</select>`
+      : `<span style="font-size:11px;color:var(--muted);padding:0 2px">${r.laps[0].num==='Full'?'Full run':`Lap ${r.laps[0].num}`}</span>`;
+    return `<div class="rpill" style="border-color:${r.color}">
+      <div class="rpill-dot" style="background:${r.color}"></div>
+      <span class="rpill-name">${r.filename.replace(/\.csv$/i,'').substring(0,16)}</span>
+      ${lapSel}
+      <button class="rpill-del" onclick="removeRun('${r.id}')">×</button>
+    </div>`;
+  }).join('');
+}
+
+/* ════════════════════════════════════════════════════════
+   GAUGE HELPERS (shared arc math)
+════════════════════════════════════════════════════════ */
+function gaugeArc(frac, r=75, cx=100, cy=100, sDeg=225, sw=270) {
+  frac = Math.max(0, Math.min(1, frac)); if (!frac) return '';
+  const toXY = d => { const rd=d*Math.PI/180; return [cx+r*Math.sin(rd),cy-r*Math.cos(rd)]; };
+  const [x1,y1]=toXY(sDeg), [x2,y2]=toXY(sDeg+frac*sw);
+  return `M ${x1.toFixed(2)},${y1.toFixed(2)} A ${r} ${r} 0 ${frac*sw>180?1:0} 1 ${x2.toFixed(2)},${y2.toFixed(2)}`;
+}
+
+/* ════════════════════════════════════════════════════════
+   G-FORCE CANVAS (all runs overlaid)
+════════════════════════════════════════════════════════ */
+function drawGForce() {
+  const cv = document.getElementById('gforce-canvas');
+  const ctx = cv.getContext('2d');
+  const W=cv.width, H=cv.height, cx=W/2, cy=H/2;
+  const maxG=1.5, sc=(Math.min(W,H)*0.42)/maxG;
+
+  ctx.clearRect(0,0,W,H); ctx.fillStyle='#0a0e14'; ctx.fillRect(0,0,W,H);
+  [0.5,1.0,1.5].forEach(g => {
+    ctx.beginPath(); ctx.arc(cx,cy,g*sc,0,2*Math.PI);
+    ctx.strokeStyle=g===1.5?'#252d38':'#1a2230'; ctx.lineWidth=g===1.5?1.5:1; ctx.stroke();
+    ctx.fillStyle='#3a4050'; ctx.font='10px monospace'; ctx.textAlign='left';
+    ctx.fillText(`${g}g`,cx+g*sc+3,cy-3);
+  });
+  ctx.beginPath();
+  ctx.moveTo(cx-maxG*sc*1.1,cy); ctx.lineTo(cx+maxG*sc*1.1,cy);
+  ctx.moveTo(cx,cy-maxG*sc*1.1); ctx.lineTo(cx,cy+maxG*sc*1.1);
+  ctx.strokeStyle='#1a2230'; ctx.lineWidth=1; ctx.stroke();
+  ctx.fillStyle='#3a4050'; ctx.font='10px monospace';
+  ctx.textAlign='center';
+  ctx.fillText('ACCEL',cx,cy-maxG*sc-7); ctx.fillText('BRAKE',cx,cy+maxG*sc+15);
+  ctx.textAlign='right'; ctx.fillText('L',cx-maxG*sc-5,cy+4);
+  ctx.textAlign='left';  ctx.fillText('R',cx+maxG*sc+5,cy+4);
+
+  // Trails and dots for each run
+  for (const run of runs) {
+    const hist = gHistories[run.id] || [];
+    hist.forEach((pt,i) => {
+      const a = ((i+1)/hist.length)*0.5;
+      ctx.beginPath(); ctx.arc(cx+pt.x*sc,cy-pt.y*sc,2,0,2*Math.PI);
+      ctx.fillStyle = hexA(run.color, a); ctx.fill();
+    });
+    const d = run.lapData[run.currentIdx];
+    if (d.glat!=null && d.glon!=null) {
+      const px=cx+d.glat*sc, py=cy-d.glon*sc;
+      ctx.beginPath(); ctx.arc(px,py,6,0,2*Math.PI);
+      ctx.fillStyle=run.color; ctx.fill();
+      ctx.beginPath(); ctx.arc(px,py,6,0,2*Math.PI);
+      ctx.strokeStyle='rgba(255,255,255,.6)'; ctx.lineWidth=1.5; ctx.stroke();
+    }
+  }
+}
+
+function hexA(hex, a) {
+  const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+/* ════════════════════════════════════════════════════════
+   PER-FRAME DISPLAY UPDATE
+════════════════════════════════════════════════════════ */
+function updateAllDisplays() {
+  const fast = getFastestRun();
+
+  for (const run of runs) {
+    const d = run.lapData[run.currentIdx];
+    const lt = getLapT(run, run.currentIdx);
+
+    // Marker
+    run.marker?.setLatLng([d.lat, d.lon]);
+
+    // G-force history
+    if (!gHistories[run.id]) gHistories[run.id] = [];
+    if (d.glat!=null && d.glon!=null) {
+      gHistories[run.id].push({x:d.glat, y:d.glon});
+      if (gHistories[run.id].length > G_HIST) gHistories[run.id].shift();
+    }
+
+    // Live metric row
+    const mph  = document.getElementById(`rv-mph-${run.id}`);
+    const rpm  = document.getElementById(`rv-rpm-${run.id}`);
+    const gear = document.getElementById(`rv-gear-${run.id}`);
+    const thr  = document.getElementById(`rv-thr-${run.id}`);
+    const brk  = document.getElementById(`rv-brk-${run.id}`);
+    const sec  = document.getElementById(`rv-sec-${run.id}`);
+    const delt = document.getElementById(`rv-delta-${run.id}`);
+
+    if (mph)  mph.textContent  = Math.round(d.mph||0);
+    if (rpm)  rpm.textContent  = Math.round(d.rpm||0);
+    if (gear) gear.textContent = d.gear!=null?(d.gear===0?'N':d.gear):'–';
+    if (thr)  thr.style.width  = `${Math.min(100,d.thr||0)}%`;
+    if (brk)  brk.style.width  = `${Math.min(100,(d.brk||0)/globalMaxBrk*100)}%`;
+
+    // Current sector indicator
+    if (sec && run.sectorTimes.length) {
+      let curSec = 0;
+      for (let i=0; i<run.sectorTimes.length; i++) {
+        if (lt >= run.sectorTimes[i].t_start) curSec=i; else break;
+      }
+      sec.textContent = `S${curSec+1}`;
+    } else if (sec) sec.textContent = '';
+
+    // Cumulative delta vs fastest
+    if (delt && fast && fast !== run && run.sectorTimes.length && fast.sectorTimes.length) {
+      let gap = 0;
+      for (let i = 0; i < run.sectorTimes.length; i++) {
+        const rs = run.sectorTimes[i], rf = fast.sectorTimes[i];
+        if (!rs || !rf) continue;
+        if (lt >= rs.t_end) gap += rs.duration - rf.duration;
+      }
+      if (gap !== 0) {
+        delt.textContent = (gap>0?'+':'')+( gap/1000).toFixed(2)+'s';
+        delt.style.color = gap > 0 ? 'var(--red)' : 'var(--green)';
+      } else delt.textContent = '';
+    } else if (delt) delt.textContent = '';
+  }
+
+  // Sector table highlight
+  updateSectorHighlight();
+
+  // G-force canvas
+  drawGForce();
+
+  // Slider + time display
+  if (!sliderDragging) document.getElementById('time-slider').value = syncedTime;
+  document.getElementById('time-disp').textContent = fmtTime(syncedTime);
+}
+
+/* ════════════════════════════════════════════════════════
+   PLAYBACK ENGINE
+════════════════════════════════════════════════════════ */
+function animLoop(ts) {
+  if (!isPlaying) return;
+  if (lastTs !== null) syncedTime += (ts - lastTs) * playbackSpeed;
+  lastTs = ts;
+  if (syncedTime >= maxDuration) {
+    syncedTime = maxDuration; isPlaying = false; lastTs = null; updatePlayBtn();
+  }
+  runs.forEach(r => {
+    r.currentIdx = findLapIdx(r, Math.min(syncedTime, r.lapDuration));
+  });
+  updateAllDisplays();
+  if (isPlaying) rafId = requestAnimationFrame(animLoop);
+}
+
+function togglePlay() {
+  if (!runs.length) return;
+  if (isPlaying) { isPlaying=false; lastTs=null; cancelAnimationFrame(rafId); }
+  else {
+    if (syncedTime >= maxDuration) { syncedTime=0; runs.forEach(r=>{r.currentIdx=0; gHistories[r.id]=[];}); }
+    isPlaying=true; rafId=requestAnimationFrame(animLoop);
+  }
+  updatePlayBtn();
+}
+
+function stopPlay() {
+  isPlaying=false; lastTs=null; cancelAnimationFrame(rafId); syncedTime=0;
+  runs.forEach(r=>{r.currentIdx=0; gHistories[r.id]=[];});
+  updatePlayBtn(); if (runs.length) updateAllDisplays();
+}
+
+function updatePlayBtn() {
+  const btn=document.getElementById('play-btn');
+  btn.textContent = isPlaying ? '⏸ Pause' : '▶ Play';
+  btn.className = 'ctrl-btn'+(isPlaying?' playing':'');
+}
+
+function setSpeed(s) {
+  playbackSpeed=s;
+  document.querySelectorAll('.spd-btn').forEach((b,i)=>b.classList.toggle('active',[1,2,5,10][i]===s));
+}
+
+const slider = document.getElementById('time-slider');
+slider.addEventListener('mousedown',  ()=>{ sliderDragging=true;  });
+slider.addEventListener('touchstart', ()=>{ sliderDragging=true;  });
+document.addEventListener('mouseup',  ()=>{ sliderDragging=false; });
+document.addEventListener('touchend', ()=>{ sliderDragging=false; });
+slider.addEventListener('input', e => {
+  syncedTime = parseFloat(e.target.value);
+  runs.forEach(r => {
+    r.currentIdx = findLapIdx(r, Math.min(syncedTime, r.lapDuration));
+    gHistories[r.id] = [];
+  });
+  updateAllDisplays();
+});
+
+/* ════════════════════════════════════════════════════════
+   RUN MANAGEMENT
+════════════════════════════════════════════════════════ */
+function addRun(allData, filename) {
+  if (runs.length >= RUN_COLORS.length) {
+    alert(`Maximum ${RUN_COLORS.length} runs supported.`); return;
+  }
+  const laps = extractLaps(allData);
+  if (!laps.length) { alert('No valid lap data found in ' + filename); return; }
+
+  const run = {
+    id:            'r' + ridCounter++,
+    color:         RUN_COLORS[runs.length % RUN_COLORS.length],
+    filename,
+    allData,
+    laps,
+    selectedLapIdx: 0,
+    lapData:       null,
+    lapT0:         0,
+    lapDuration:   0,
+    sectorTimes:   [],
+    currentIdx:    0,
+    polylines:     [],
+    marker:        null,
+  };
+  setRunLap(run, 0);  // pick first lap by default
+
+  // If >1 lap, try to pick a "hot lap" (fastest clean lap, not first or last)
+  if (laps.length > 2) {
+    const durations = laps.map(l => l.data[l.data.length-1].t - l.data[0].t);
+    const minDur = Math.min(...durations.slice(1, -1)); // skip first & last laps
+    const bestIdx = durations.findIndex((d,i) => i>0 && i<laps.length-1 && d===minDur);
+    if (bestIdx > 0) setRunLap(run, bestIdx);
+  }
+
+  runs.push(run);
+  buildRunTrack(run);
+  fitMapToAllRuns();
+  recomputeGlobalMeta();
+  recomputeAllSectorTimes();
+
+  renderPills();
+  renderRunRows();
+
+  document.getElementById('overlay').classList.add('hidden');
+  document.getElementById('stop-btn').disabled = false;
+  document.getElementById('play-btn').disabled = false;
+
+  // Show initial state
+  runs.forEach(r => { r.currentIdx = findLapIdx(r, Math.min(syncedTime, r.lapDuration)); });
+  updateAllDisplays();
+}
+
+function removeRun(rid) {
+  const idx = runs.findIndex(r => r.id === rid);
+  if (idx < 0) return;
+  const run = runs[idx];
+  run.polylines.forEach(p => trackLayer.removeLayer(p));
+  if (run.marker) markerLayer.removeLayer(run.marker);
+  delete gHistories[rid];
+  runs.splice(idx, 1);
+
+  if (!runs.length) {
+    syncedTime = 0; maxDuration = 0;
+    sectors = []; sectorLayer.clearLayers();
+    document.getElementById('stop-btn').disabled = true;
+    document.getElementById('play-btn').disabled = true;
+    document.getElementById('overlay').classList.remove('hidden');
+    document.getElementById('sector-msg').style.display='none';
+    document.getElementById('stbl').style.display='none';
+  } else {
+    recomputeGlobalMeta();
+    recomputeAllSectorTimes();
+  }
+
+  renderPills();
+  renderRunRows();
+  renderSectorTable();
+  if (runs.length) updateAllDisplays();
+}
+
+function changeLap(rid, lapIdx) {
+  const run = runs.find(r => r.id === rid);
+  if (!run) return;
+  setRunLap(run, lapIdx);
+  buildRunTrack(run);
+  fitMapToAllRuns();
+  recomputeGlobalMeta();
+  recomputeAllSectorTimes();
+  renderPills();
+  renderRunRows();
+  updateAllDisplays();
+}
+
+/* ════════════════════════════════════════════════════════
+   FILE HANDLING
+════════════════════════════════════════════════════════ */
+const fileInput = document.getElementById('file-input');
+fileInput.addEventListener('change', e => {
+  const files = [...e.target.files]; e.target.value = '';
+  processFileQueue(files);
+});
+
+const dropZone = document.getElementById('drop-zone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('dragover');
+  processFileQueue([...e.dataTransfer.files].filter(f => f.name.toLowerCase().endsWith('.csv')));
+});
+
+function setProgress(msg) { document.getElementById('progress-msg').textContent = msg; }
+
+async function processFileQueue(files) {
+  const csvFiles = files.filter(f => f.name.toLowerCase().endsWith('.csv'));
+  if (!csvFiles.length) return;
+  for (const file of csvFiles) await loadFile(file);
+}
+
+function loadFile(file) {
+  return new Promise(resolve => {
+    setProgress(`⏳ Reading ${file.name}…`);
+    const reader = new FileReader();
+    reader.onload = e => {
+      setProgress(`⏳ Parsing ${file.name}…`);
+      setTimeout(() => {
+        try {
+          const raw = parseRunCSV(e.target.result);
+          if (!raw.length) throw new Error('No valid GPS rows');
+          setProgress(`⏳ Processing ${raw.length.toLocaleString()} rows…`);
+          setTimeout(() => {
+            try {
+              const data = processData(raw);
+              addRun(data, file.name);
+              setProgress('');
+            } catch(err) { setProgress(''); alert(file.name+': '+err.message); }
+            resolve();
+          }, 20);
+        } catch(err) { setProgress(''); alert(file.name+': '+err.message); resolve(); }
+      }, 20);
+    };
+    reader.onerror = () => { setProgress(''); alert('Could not read '+file.name); resolve(); };
+    reader.readAsText(file);
+  });
+}
+
+/* ════════════════════════════════════════════════════════
+   UTILITIES
+════════════════════════════════════════════════════════ */
+function fmtTime(ms) {
+  if (ms==null||isNaN(ms)) return '0:00.000';
+  const s=ms/1000, m=Math.floor(s/60), ss=(s%60).toFixed(3).padStart(6,'0');
+  return `${m}:${ss}`;
+}
+function shortName(fn) {
+  return fn.replace(/\.csv$/i,'').split('-')[0].substring(0,12);
+}
+
+/* ════════════════════════════════════════════════════════
+   INITIALISE
+════════════════════════════════════════════════════════ */
+map.setView([39,-98], 4);
+drawGForce();
+</script>
+</body>
+</html>
