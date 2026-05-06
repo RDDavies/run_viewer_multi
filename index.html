@@ -64,7 +64,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text);
 #file-input { display: none; }
 
 /* ── Layout ── */
-#body { display: flex; flex-direction: column; height: calc(100vh - 50px - 52px); }
+#body { display: flex; flex-direction: column; height: calc(100vh - 50px - 52px - 34px); }
 #content { display: flex; flex: 1; overflow: hidden; }
 #map { flex: 2; min-width: 0; }
 
@@ -153,6 +153,30 @@ html, body { height: 100%; background: var(--bg); color: var(--text);
   border: 1px solid var(--border); border-radius: 4px; padding: 2px 4px; cursor: pointer;
 }
 #baseline-select:focus { outline: none; border-color: var(--accent); }
+
+/* ── Trim bar ── */
+#trim-bar {
+  height: 34px; flex-shrink: 0; background: #0d1117;
+  border-top: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px; padding: 0 14px;
+}
+.trim-btn {
+  padding: 3px 9px; border: 1px solid var(--border); background: transparent;
+  color: var(--muted); border-radius: 4px; cursor: pointer; font-size: 11px;
+  transition: all .15s; white-space: nowrap; flex-shrink: 0;
+}
+.trim-btn:hover:not(:disabled) { background: var(--border); color: var(--text); }
+.trim-btn:disabled { opacity: .3; cursor: default; }
+#trim-start-btn  { border-color: var(--green); color: var(--green); }
+#trim-start-btn:hover:not(:disabled) { background: rgba(57,211,83,.12); }
+#trim-finish-btn { border-color: var(--red); color: var(--red); }
+#trim-finish-btn:hover:not(:disabled) { background: rgba(248,81,73,.12); }
+.trim-disp { font-size: 11px; font-variant-numeric: tabular-nums;
+             min-width: 52px; color: var(--muted); }
+#trim-start-disp.set  { color: var(--green); }
+#trim-finish-disp.set { color: var(--red); }
+.trim-sep { color: var(--border); flex-shrink: 0; }
+#trim-reset-btn { margin-left: auto; }
 
 /* ── Controls ── */
 #controls {
@@ -264,6 +288,15 @@ html, body { height: 100%; background: var(--bg); color: var(--text);
     </div>
   </div>
 
+  <div id="trim-bar">
+    <button class="trim-btn" id="trim-start-btn"  onclick="setTrimStart()"  disabled>⬤ Set Start</button>
+    <span  class="trim-disp" id="trim-start-disp">—</span>
+    <span  class="trim-sep">→</span>
+    <button class="trim-btn" id="trim-finish-btn" onclick="setTrimFinish()" disabled>⬤ Set Finish</button>
+    <span  class="trim-disp" id="trim-finish-disp">—</span>
+    <button class="trim-btn" id="trim-reset-btn"  onclick="resetTrim()"    disabled>↺ Reset</button>
+  </div>
+
   <div id="controls">
     <button class="ctrl-btn" id="stop-btn" onclick="stopPlay()" disabled>■</button>
     <button class="ctrl-btn" id="play-btn" onclick="togglePlay()" disabled>▶ Play</button>
@@ -307,7 +340,11 @@ let rafId = null, lastTs = null, sliderDragging = false;
 let globalMaxBrk = 10000, globalMaxRpm = 9000;
 const gHistories = {};    // rid → [{x,y}]
 const G_HIST = 60;
-let baselineRunId = null; // null = auto (fastest), else a run id
+let baselineRunId  = null; // null = auto (fastest), else a run id
+let trimStartPos   = null; // {lat, lon} captured from baseline run, or null
+let trimFinishPos  = null; // {lat, lon} captured from baseline run, or null
+let trimStartLabel = null; // display string for UI (time when captured)
+let trimFinishLabel= null;
 
 /* ════════════════════════════════════════════════════════
    CSV PARSING (identical to single-run version)
@@ -412,6 +449,101 @@ function setBaseline(id) {
   if (runs.length) updateAllDisplays();
 }
 
+/* ════════════════════════════════════════════════════════
+   TRIM CONTROLS  (location-based)
+════════════════════════════════════════════════════════ */
+function findClosestIdx(data, lat, lon) {
+  let best = 0, bestDist = Infinity;
+  for (let i = 0; i < data.length; i++) {
+    const dlat = data[i].lat - lat, dlon = data[i].lon - lon;
+    const d = dlat*dlat + dlon*dlon;
+    if (d < bestDist) { bestDist = d; best = i; }
+  }
+  return best;
+}
+
+function setTrimStart() {
+  const base = getBaselineRun();
+  if (!base) return;
+  const d = base.lapData[base.currentIdx];
+  trimStartPos   = { lat: d.lat, lon: d.lon };
+  trimStartLabel = fmtTime(getLapT(base, base.currentIdx));
+  // If the new start is at or beyond the finish, clear finish
+  if (trimFinishPos) {
+    const full = base.laps[base.selectedLapIdx].data;
+    const si = findClosestIdx(full, trimStartPos.lat,  trimStartPos.lon);
+    const fi = findClosestIdx(full, trimFinishPos.lat, trimFinishPos.lon);
+    if (si >= fi) { trimFinishPos = null; trimFinishLabel = null; }
+  }
+  applyTrim();
+}
+
+function setTrimFinish() {
+  const base = getBaselineRun();
+  if (!base) return;
+  const d = base.lapData[base.currentIdx];
+  trimFinishPos   = { lat: d.lat, lon: d.lon };
+  trimFinishLabel = fmtTime(getLapT(base, base.currentIdx));
+  // If the new finish is at or before the start, clear start
+  if (trimStartPos) {
+    const full = base.laps[base.selectedLapIdx].data;
+    const si = findClosestIdx(full, trimStartPos.lat,  trimStartPos.lon);
+    const fi = findClosestIdx(full, trimFinishPos.lat, trimFinishPos.lon);
+    if (fi <= si) { trimStartPos = null; trimStartLabel = null; }
+  }
+  applyTrim();
+}
+
+function resetTrim() {
+  trimStartPos = null; trimFinishPos = null;
+  trimStartLabel = null; trimFinishLabel = null;
+  applyTrim();
+}
+
+function applyTrim() {
+  runs.forEach(r => {
+    const full = r.laps[r.selectedLapIdx].data;
+    let si = 0, fi = full.length - 1;
+    if (trimStartPos)  si = findClosestIdx(full, trimStartPos.lat,  trimStartPos.lon);
+    if (trimFinishPos) fi = findClosestIdx(full, trimFinishPos.lat, trimFinishPos.lon);
+    if (si >= fi) { si = 0; fi = full.length - 1; } // guard invalid range
+    r.lapData    = full.slice(si, fi + 1);
+    r.lapT0      = r.lapData[0].t;
+    r.lapDuration= r.lapData[r.lapData.length - 1].t - r.lapT0;
+    r.currentIdx = 0;
+    gHistories[r.id] = [];
+  });
+  syncedTime = 0;
+  runs.forEach(r => buildRunTrack(r));
+  recomputeGlobalMeta();
+  recomputeAllSectorTimes();
+  renderSectorTable();
+  runs.forEach(r => { r.currentIdx = findLapIdx(r, Math.min(syncedTime, r.lapDuration)); });
+  if (runs.length) updateAllDisplays();
+  updateTrimUI();
+}
+
+function updateTrimUI() {
+  const hasRuns = runs.length > 0;
+  const trimActive = trimStartPos !== null || trimFinishPos !== null;
+  const startBtn   = document.getElementById('trim-start-btn');
+  const finishBtn  = document.getElementById('trim-finish-btn');
+  const resetBtn   = document.getElementById('trim-reset-btn');
+  const startDisp  = document.getElementById('trim-start-disp');
+  const finishDisp = document.getElementById('trim-finish-disp');
+  if (startBtn)   startBtn.disabled  = !hasRuns;
+  if (finishBtn)  finishBtn.disabled = !hasRuns;
+  if (resetBtn)   resetBtn.disabled  = !trimActive;
+  if (startDisp) {
+    startDisp.textContent = trimStartLabel  ?? '—';
+    startDisp.className   = 'trim-disp' + (trimStartPos  ? ' set' : '');
+  }
+  if (finishDisp) {
+    finishDisp.textContent = trimFinishLabel ?? '—';
+    finishDisp.className   = 'trim-disp' + (trimFinishPos ? ' set' : '');
+  }
+}
+
 function recomputeGlobalMeta() {
   globalMaxBrk = 1; globalMaxRpm = 1;
   for (const r of runs) for (const d of r.lapData) {
@@ -422,7 +554,9 @@ function recomputeGlobalMeta() {
   globalMaxRpm = Math.max(globalMaxRpm, 9000);
   maxDuration = Math.max(...runs.map(r => r.lapDuration), 0);
   const sl = document.getElementById('time-slider');
-  sl.max = maxDuration; sl.value = Math.min(syncedTime, maxDuration);
+  sl.min = 0;
+  sl.max = maxDuration;
+  sl.value = Math.min(syncedTime, maxDuration);
 }
 
 /* ════════════════════════════════════════════════════════
@@ -547,11 +681,13 @@ const sectorLayer = L.layerGroup().addTo(map);
 function buildRunTrack(run) {
   run.polylines.forEach(p => trackLayer.removeLayer(p));
   run.polylines = [];
-  const cv = L.canvas({ padding: 0.5 });
-  const line = L.polyline(run.lapData.map(d => [d.lat, d.lon]), {
-    color: run.color, weight: 3, opacity: 0.75, renderer: cv
-  }).addTo(trackLayer);
-  run.polylines.push(line);
+  if (run.lapData.length >= 2) {
+    const cv = L.canvas({ padding: 0.5 });
+    const line = L.polyline(run.lapData.map(d => [d.lat, d.lon]),
+      { color: run.color, weight: 3, opacity: 0.75, renderer: cv })
+      .addTo(trackLayer);
+    run.polylines.push(line);
+  }
 
   // Marker
   if (run.marker) markerLayer.removeLayer(run.marker);
@@ -988,6 +1124,7 @@ function addRun(allData, filename) {
 
   runs.push(run);
   document.getElementById('clear-btn').disabled = false;
+  updateTrimUI();
   buildRunTrack(run);
   fitMapToAllRuns();
   recomputeGlobalMeta();
@@ -1021,6 +1158,7 @@ function removeRun(rid) {
     document.getElementById('stop-btn').disabled = true;
     document.getElementById('play-btn').disabled = true;
     document.getElementById('clear-btn').disabled = true;
+    trimStartPos = null; trimFinishPos = null; trimStartLabel = null; trimFinishLabel = null;
     document.getElementById('overlay').classList.remove('hidden');
     document.getElementById('sector-msg').style.display='none';
     document.getElementById('stbl').style.display='none';
@@ -1032,6 +1170,7 @@ function removeRun(rid) {
   renderPills();
   renderRunRows();
   renderSectorTable();
+  updateTrimUI();
   if (runs.length) updateAllDisplays();
 }
 
@@ -1043,12 +1182,18 @@ function changeLap(rid, lapIdx) {
   const run = runs.find(r => r.id === rid);
   if (!run) return;
   setRunLap(run, lapIdx);
-  buildRunTrack(run);
-  fitMapToAllRuns();
-  recomputeGlobalMeta();
-  recomputeAllSectorTimes();
+  // Re-apply location trim to the new lap data
+  if (trimStartPos || trimFinishPos) {
+    applyTrim();
+  } else {
+    buildRunTrack(run);
+    fitMapToAllRuns();
+    recomputeGlobalMeta();
+    recomputeAllSectorTimes();
+  }
   renderPills();
   renderRunRows();
+  renderSectorTable();
   updateAllDisplays();
 }
 
