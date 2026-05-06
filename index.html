@@ -825,7 +825,7 @@ function renderSectorTable() {
   if (blSel) {
     const prev = blSel.value;
     blSel.innerHTML = '<option value="">Auto (fastest)</option>'
-      + runs.map(r => `<option value="${r.id}">${shortName(r.filename)}</option>`).join('');
+      + runs.map(r => `<option value="${r.id}">${r.filename.replace(/\.csv$/i,'')}</option>`).join('');
     blSel.value = runs.find(r => r.id === prev) ? prev : '';
     if (!blSel.value) baselineRunId = null;
   }
