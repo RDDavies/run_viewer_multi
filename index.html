@@ -152,6 +152,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text);
 #stbl .sc-delta { font-size: 10px; display: block; }
 #stbl .sc-delta.pos { color: var(--red); }
 #stbl .sc-delta.neg { color: var(--green); }
+#stbl .sc-dist { font-size: 9px; color: var(--muted); display: block; margin-top: 1px; }
 #stbl .total-row td { border-top: 1px solid var(--border);
                        border-bottom: none; font-weight: 600; padding-top: 5px; }
 
@@ -682,6 +683,22 @@ function findNearestMapIdx(lapData, lat, lon) {
 /* ════════════════════════════════════════════════════════
    SECTOR TIMES PER RUN
 ════════════════════════════════════════════════════════ */
+function sectorDistanceM(lapData, startIdx, endIdx) {
+  let dist = 0;
+  for (let i = startIdx; i < endIdx && i + 1 < lapData.length; i++) {
+    const dlat = (lapData[i+1].lat - lapData[i].lat) * 111000;
+    const dlon = (lapData[i+1].lon - lapData[i].lon) * 111000
+                 * Math.cos(lapData[i].lat * Math.PI / 180);
+    dist += Math.sqrt(dlat*dlat + dlon*dlon);
+  }
+  return dist;
+}
+
+function fmtDist(m) {
+  const ft = m * 3.28084;
+  return ft >= 5280 ? (ft/5280).toFixed(2)+'mi' : Math.round(ft)+'ft';
+}
+
 function computeRunSectorTimes(run) {
   if (!sectors.length) { run.sectorTimes = []; return; }
   const ld = run.lapData, n = ld.length;
@@ -690,7 +707,10 @@ function computeRunSectorTimes(run) {
   const times = [];
   for (let i = 0; i < gates.length - 1; i++) {
     const t1 = getLapT(run, gates[i]), t2 = getLapT(run, gates[i+1]);
-    times.push({ t_start: t1, t_end: t2, duration: t2 - t1 });
+    times.push({
+      t_start: t1, t_end: t2, duration: t2 - t1,
+      distM: sectorDistanceM(ld, gates[i], gates[i+1])
+    });
   }
   run.sectorTimes = times;
 }
@@ -810,9 +830,11 @@ function renderSectorTable() {
   info.textContent = `${sectors.length} boundaries · ${N} sectors`;
   msg.style.display='none'; tbl.style.display='';
 
-  // Per-sector absolute fastest (for bold highlight only)
-  const sectorFastest = Array.from({length: N}, (_, i) =>
+  // Per-sector absolute fastest time and shortest distance
+  const sectorFastest  = Array.from({length: N}, (_, i) =>
     Math.min(...runs.map(r => r.sectorTimes[i]?.duration ?? Infinity)));
+  const sectorShortest = Array.from({length: N}, (_, i) =>
+    Math.min(...runs.map(r => r.sectorTimes[i]?.distM ?? Infinity)));
 
   let h = '<thead><tr><th>Sec</th>';
   runs.forEach(r => {
@@ -839,10 +861,20 @@ function renderSectorTable() {
           dStr = `<span class="sc-delta ${cls}">${sign}${(delta/1000).toFixed(3)}</span>`;
         }
       }
+      const isShortest = st.distM != null && Math.abs(st.distM - sectorShortest[i]) < 0.5;
+      let distStr = '';
+      if (st.distM != null) {
+        if (isShortest) {
+          distStr = `<span class="sc-dist" style="color:var(--green)">(${fmtDist(st.distM)})</span>`;
+        } else {
+          const diff = st.distM - sectorShortest[i];
+          distStr = `<span class="sc-dist" style="color:var(--red)">(+${fmtDist(diff)})</span>`;
+        }
+      }
       h += `<td class="${isBest ? 'sc-best' : ''}" `
          + `data-sc-rid="${r.id}" data-sc-idx="${i}" `
          + `style="color:${isBest ? r.color : 'var(--muted)'}">`
-         + `${(st.duration/1000).toFixed(3)}${dStr}</td>`;
+         + `${(st.duration/1000).toFixed(3)}${dStr}${distStr}</td>`;
     });
     h += '</tr>';
   }
@@ -863,8 +895,14 @@ function renderSectorTable() {
         dStr = `<span class="sc-delta ${cls}">${sign}${(delta/1000).toFixed(3)}</span>`;
       }
     }
+    const totalDist = r.sectorTimes.reduce((s, st) => s + (st.distM ?? 0), 0);
+    const shortestTotal = Math.min(...runs.map(r2 => r2.sectorTimes.reduce((s,st) => s+(st.distM??0),0)));
+    const isTotalShortest = totalDist > 0 && Math.abs(totalDist - shortestTotal) < 0.5;
+    const totalDistStr = totalDist > 0
+      ? `<span class="sc-dist"${isTotalShortest ? ' style="color:var(--green)"' : ''}>(${fmtDist(totalDist)})</span>`
+      : '';
     h += `<td style="color:${isBest ? r.color : 'var(--muted)'}">`
-       + `${fmtTime(r.lapDuration)}${dStr}</td>`;
+       + `${fmtTime(r.lapDuration)}${dStr}${totalDistStr}</td>`;
   });
   h += '</tr></tbody>';
   tbl.innerHTML = h;
