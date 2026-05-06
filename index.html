@@ -54,6 +54,13 @@ html, body { height: 100%; background: var(--bg); color: var(--text);
   cursor: pointer; font-size: 12px;
 }
 #add-btn:hover { opacity: .85; }
+#clear-btn {
+  flex-shrink: 0; padding: 5px 12px; background: transparent;
+  color: var(--red); border: 1px solid var(--red); border-radius: 6px; font-weight: 600;
+  cursor: pointer; font-size: 12px; transition: all .15s;
+}
+#clear-btn:hover:not(:disabled) { background: rgba(248,81,73,.15); }
+#clear-btn:disabled { opacity: .3; cursor: default; }
 #file-input { display: none; }
 
 /* ── Layout ── */
@@ -202,6 +209,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text);
   <h1>⏱ COMPARE</h1>
   <div id="pills-wrap"></div>
   <button id="add-btn" onclick="document.getElementById('file-input').click()">+ Add Run</button>
+  <button id="clear-btn" onclick="clearAllRuns()" disabled>✕ Clear All</button>
   <input type="file" id="file-input" accept=".csv" multiple/>
 </div>
 
@@ -515,12 +523,10 @@ function buildRunTrack(run) {
   run.polylines.forEach(p => trackLayer.removeLayer(p));
   run.polylines = [];
   const cv = L.canvas({ padding: 0.5 });
-  // Color the track by the run's own color (solid, not speed-gradient)
-  // so multiple overlapping runs remain identifiable
-  L.polyline(run.lapData.map(d => [d.lat, d.lon]), {
+  const line = L.polyline(run.lapData.map(d => [d.lat, d.lon]), {
     color: run.color, weight: 3, opacity: 0.75, renderer: cv
   }).addTo(trackLayer);
-  run.polylines.push(cv);
+  run.polylines.push(line);
 
   // Marker
   if (run.marker) markerLayer.removeLayer(run.marker);
@@ -919,6 +925,7 @@ function addRun(allData, filename) {
   }
 
   runs.push(run);
+  document.getElementById('clear-btn').disabled = false;
   buildRunTrack(run);
   fitMapToAllRuns();
   recomputeGlobalMeta();
@@ -950,6 +957,7 @@ function removeRun(rid) {
     sectors = []; sectorLayer.clearLayers();
     document.getElementById('stop-btn').disabled = true;
     document.getElementById('play-btn').disabled = true;
+    document.getElementById('clear-btn').disabled = true;
     document.getElementById('overlay').classList.remove('hidden');
     document.getElementById('sector-msg').style.display='none';
     document.getElementById('stbl').style.display='none';
@@ -962,6 +970,10 @@ function removeRun(rid) {
   renderRunRows();
   renderSectorTable();
   if (runs.length) updateAllDisplays();
+}
+
+function clearAllRuns() {
+  while (runs.length) removeRun(runs[0].id);
 }
 
 function changeLap(rid, lapIdx) {
