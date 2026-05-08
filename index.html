@@ -76,6 +76,13 @@ html, body { height: 100%; background: var(--bg); color: var(--text);
 }
 #clear-btn:hover:not(:disabled) { background: rgba(248,81,73,.15); }
 #clear-btn:disabled { opacity: .3; cursor: default; }
+#help-btn {
+  flex-shrink: 0; padding: 5px 10px; background: transparent;
+  color: var(--muted); border: 1px solid var(--border); border-radius: 6px;
+  cursor: pointer; font-size: 12px; font-weight: 600; transition: all .15s;
+  text-decoration: none; display: flex; align-items: center; gap: 5px;
+}
+#help-btn:hover { background: var(--border); color: var(--text); }
 #file-input { display: none; }
 
 /* ── Header drop zone ── */
@@ -303,6 +310,10 @@ html, body { height: 100%; background: var(--bg); color: var(--text);
       <div style="flex:1"></div>
       <button id="add-btn" onclick="document.getElementById('file-input').click()">+ Add Run</button>
       <button id="clear-btn" onclick="clearAllRuns()" disabled>✕ Clear All</button>
+      <a id="help-btn" href="help.html" target="_blank">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Help
+      </a>
       <input type="file" id="file-input" accept=".csv" multiple/>
     </div>
     <div id="header-drop">
