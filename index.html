@@ -273,6 +273,14 @@ html, body { height: 100%; background: var(--bg); color: var(--text);
 .drop-title { font-size: 19px; font-weight: 600; margin-bottom: 6px; }
 .drop-sub { font-size: 13px; color: var(--muted); }
 #progress-msg { font-size: 13px; color: var(--yellow); min-height: 18px; }
+#sample-btn {
+  padding: 9px 24px; background: transparent;
+  color: var(--muted); border: 1px solid var(--border);
+  border-radius: 8px; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all .2s; letter-spacing: .4px;
+}
+#sample-btn:hover { background: var(--border); color: var(--text); }
+#sample-btn:disabled { opacity: .4; cursor: default; }
 </style>
 </head>
 <body>
@@ -398,8 +406,14 @@ html, body { height: 100%; background: var(--bg); color: var(--text);
       <svg width="160" height="160" viewBox="0 0 1024 1024" style="color:#ffffff"><use href="#pa-logo"/></svg>
     </div>
     <div class="drop-title">Drop run CSV files here</div>
-    <div class="drop-sub">Drop multiple files at once!</div>
+    <div class="drop-sub">Drop multiple files at once, or click to browse</div>
   </div>
+  <div style="display:flex;align-items:center;gap:14px;">
+    <div style="height:1px;width:80px;background:var(--border);"></div>
+    <span style="font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;">or</span>
+    <div style="height:1px;width:80px;background:var(--border);"></div>
+  </div>
+  <button id="sample-btn" onclick="loadSampleData()">⚑ Use Sample Data</button>
   <div id="progress-msg"></div>
 </div>
 
@@ -1368,6 +1382,33 @@ headerDrop.addEventListener('drop', e => {
 });
 
 function setProgress(msg) { document.getElementById('progress-msg').textContent = msg; }
+
+async function loadSampleData() {
+  const btn = document.getElementById('sample-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Loading…';
+  const samples = [
+    '20240811NNJR-Ken Houseal-5.csv',
+    '20240811NNJR-Ken Houseal-7.csv'
+  ];
+  try {
+    const files = await Promise.all(samples.map(async name => {
+      const res = await fetch(name);
+      if (!res.ok) throw new Error(`HTTP ${res.status} for ${name}`);
+      const text = await res.text();
+      return new File([text], name, { type: 'text/csv' });
+    }));
+    await processFileQueue(files);
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = '⚑ Use Sample Data';
+    if (err.message && err.message.includes('Failed to fetch')) {
+      setProgress('⚠ Sample data requires a local server. Try: npx serve .');
+    } else {
+      setProgress('⚠ Could not load sample data: ' + err.message);
+    }
+  }
+}
 
 async function processFileQueue(files) {
   const csvFiles = files.filter(f => f.name.toLowerCase().endsWith('.csv'));
