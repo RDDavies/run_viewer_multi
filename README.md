@@ -172,6 +172,6 @@ Any modern browser with ES6+ and Canvas support. Tested in Chrome, Edge, and Fir
 
 <div align="center">
 
-Built by **[Phased Approach](https://phasedapproach.com)** — data-driven motorsport analysis tools.
+Built by **[Phased Approach](https://phasedapproach.com)** — Celeritas per physicam et scientiam.
 
 </div>
