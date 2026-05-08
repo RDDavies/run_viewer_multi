@@ -281,6 +281,107 @@ html, body { height: 100%; background: var(--bg); color: var(--text);
 }
 #sample-btn:hover { background: var(--border); color: var(--text); }
 #sample-btn:disabled { opacity: .4; cursor: default; }
+
+/* ════════════════════════════════════════════════════════
+   RESPONSIVE — Tablet  768 – 1023 px
+   Side-by-side layout is kept; header height is reduced.
+════════════════════════════════════════════════════════ */
+@media (max-width: 1023px) and (min-width: 768px) {
+  #header       { height: 130px; }
+  #header-logo  { width: 130px; padding: 14px; }
+  #body         { height: calc(100vh - 130px - 52px - 34px); }
+  #header h1    { font-size: 13px; letter-spacing: 1.5px; }
+  #header-drop  { margin: 2px 0; }
+}
+
+/* ════════════════════════════════════════════════════════
+   RESPONSIVE — Mobile  < 768 px
+   Stacked layout; page scrolls; touch-friendly targets.
+════════════════════════════════════════════════════════ */
+@media (max-width: 767px) {
+
+  /* Page scroll */
+  html, body { height: auto; overflow-x: hidden; overflow-y: auto; }
+
+  /* ── Header ── */
+  #header {
+    height: auto; min-height: 56px;
+    align-items: flex-start; overflow: visible;
+  }
+  #header-logo {
+    width: 54px; padding: 10px 12px; flex-shrink: 0;
+    align-self: stretch; align-items: flex-start; padding-top: 12px;
+  }
+  #header-right { padding: 8px 10px 6px; gap: 3px; }
+  #header-top   { gap: 5px; flex-wrap: nowrap; }
+  #header h1    { font-size: 10px; letter-spacing: 1px; }
+
+  /* Collapse the drag-drop zone — not useful on touch devices */
+  #header-drop  { display: none; }
+
+  /* Tighter buttons */
+  #add-btn   { padding: 6px 10px; font-size: 11px; }
+  #clear-btn { padding: 6px 10px; font-size: 11px; }
+  #help-btn  { padding: 6px 8px;  font-size: 11px; }
+
+  /* Pill names slightly narrower */
+  .rpill-name { max-width: 72px; }
+
+  /* ── Body / content layout ── */
+  #body    { height: auto; flex-direction: column; overflow: visible; }
+  #content { flex-direction: column; overflow: visible; height: auto; }
+
+  /* ── Map ── */
+  #map { flex: none; height: 45vh; min-height: 220px; }
+
+  /* ── Panel ── */
+  #panel {
+    flex: none; min-width: 0;
+    border-left: none; border-top: 1px solid var(--border);
+    overflow: visible;
+  }
+
+  /* Run rows — allow horizontal scroll when ≥ 3 runs */
+  #run-rows { overflow-x: auto; overflow-y: hidden; }
+  .rrow     { min-width: 200px; }
+
+  /* Sector table — bounded height, both-axis scroll */
+  #sector-wrap   { flex: none; height: auto; }
+  #sector-scroll { max-height: 240px; }
+
+  /* Shrink G-force canvas slightly */
+  #gforce-canvas { width: 120px; height: 120px; }
+
+  /* ── Trim bar ── */
+  #trim-bar {
+    height: auto; min-height: 36px;
+    flex-wrap: wrap; padding: 6px 10px; row-gap: 5px;
+  }
+  #trim-reset-btn { margin-left: 0; }
+
+  /* ── Playback controls ── */
+  #controls {
+    height: auto; min-height: 44px;
+    flex-wrap: wrap; padding: 8px 10px; row-gap: 6px;
+  }
+  /* Push the slider to a full-width second row */
+  #time-slider { order: 10; flex-basis: 100%; }
+  .time-disp   { min-width: 0; font-size: 11px; }
+  /* Slightly larger touch targets on buttons */
+  .ctrl-btn  { padding: 7px 12px; }
+  .spd-btn   { padding: 5px 8px; }
+
+  /* ── Upload overlay ── */
+  .drop-zone {
+    padding: 28px 20px;
+    width: min(90vw, 340px);
+    border-radius: 12px;
+  }
+  .drop-icon svg { width: 90px !important; height: 90px !important; }
+  .drop-title    { font-size: 16px; }
+  .drop-sub      { font-size: 12px; }
+  #sample-btn    { font-size: 12px; padding: 8px 20px; }
+}
 </style>
 </head>
 <body>
@@ -783,6 +884,9 @@ const satTile = L.tileLayer(
   { attribution: 'Tiles © Esri', maxZoom: 19 });
 const map = L.map('map', { layers: [cartoTile] });
 let usingSat = false;
+
+// Re-flow map when device rotates or browser is resized
+window.addEventListener('resize', () => map.invalidateSize());
 
 function toggleTiles() {
   if (usingSat) { map.removeLayer(satTile); map.addLayer(cartoTile);
