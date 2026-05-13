@@ -1050,7 +1050,7 @@ function renderSectorTable() {
           dStr = `<span class="sc-delta ${cls}">${sign}${(delta/1000).toFixed(3)}</span>`;
         }
       }
-      const isShortest = st.distM != null && Math.abs(st.distM - sectorShortest[i]) < 0.5;
+      const isShortest = st.distM != null && Math.abs(st.distM - sectorShortest[i]) < 0.01;
       let distStr = '';
       if (st.distM != null) {
         if (isShortest) {
@@ -1086,7 +1086,7 @@ function renderSectorTable() {
     }
     const totalDist = r.sectorTimes.reduce((s, st) => s + (st.distM ?? 0), 0);
     const shortestTotal = Math.min(...runs.map(r2 => r2.sectorTimes.reduce((s,st) => s+(st.distM??0),0)));
-    const isTotalShortest = totalDist > 0 && Math.abs(totalDist - shortestTotal) < 0.5;
+    const isTotalShortest = totalDist > 0 && Math.abs(totalDist - shortestTotal) < 0.01;
     const totalDistStr = totalDist > 0
       ? `<span class="sc-dist"${isTotalShortest ? ' style="color:var(--green)"' : ''}>(${fmtDist(totalDist)})</span>`
       : '';
